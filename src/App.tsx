@@ -1,9 +1,15 @@
+import { Routes, Route } from "react-router-dom";
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+
 export default function App() {
   return (
-    <div style={{ padding: 20 }}>
-      <h1>Risk Intelligence</h1>
-      <p>App carregou com sucesso 🚀</p>
-    </div>
+    <Routes>
+      <Route path="/" element={<Login />} />
+      <Route path="/dashboard" element={<Dashboard />} />
+    </Routes>
   );
 }
+
+
 
