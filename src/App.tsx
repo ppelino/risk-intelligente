@@ -1,6 +1,24 @@
-import { Routes, Route } from "react-router-dom";
-import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
+import { Routes, Route, Link } from "react-router-dom";
+
+function Login() {
+  return (
+    <div style={{ padding: 24 }}>
+      <h1>Login</h1>
+      <p>Se você está vendo isso, o Router está OK.</p>
+      <Link to="/dashboard">Ir para Dashboard</Link>
+    </div>
+  );
+}
+
+function Dashboard() {
+  return (
+    <div style={{ padding: 24 }}>
+      <h1>Dashboard</h1>
+      <p>Se você chegou aqui, as rotas estão funcionando.</p>
+      <Link to="/">Voltar</Link>
+    </div>
+  );
+}
 
 export default function App() {
   return (
@@ -10,6 +28,8 @@ export default function App() {
     </Routes>
   );
 }
+
+
 
 
 
