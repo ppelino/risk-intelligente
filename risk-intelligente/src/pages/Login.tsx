@@ -57,7 +57,8 @@ export default function Login() {
   return (
     <div className="container" style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
       <div className="card" style={{ width: "100%", maxWidth: 420, display: "grid", gap: 10 }}>
-        <h1>DataInsight SST – Login</h1>
+       <h1>DataInsight SST – Login (V2)</h1>
+
 
         <input
           type="email"
@@ -86,3 +87,4 @@ export default function Login() {
     </div>
   );
 }
+
