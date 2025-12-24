@@ -17,8 +17,7 @@ html, body { height: 100%; }
 body {
   margin: 0;
   min-width: 320px;
-  max-width: 100vw;        /* evita "desktop fake" estourar */
-  overflow-x: clip;        /* corta rolagem lateral */
+  overflow-x: hidden;
 }
 
 a { color: inherit; text-decoration: none; }
@@ -80,13 +79,18 @@ button:disabled {
 /* Layout com Sidebar */
 .di-layout {
   min-height: 100vh;
-  width: 100%;
-  max-width: 100vw;   /* trava largura no mobile */
   display: flex;
   flex-direction: column; /* mobile */
 }
 
-.di-main { flex: 1; min-width: 0; }
+@media (min-width: 980px) {
+  .di-layout {
+    flex-direction: row; /* desktop */
+    align-items: stretch;
+  }
+}
+
+.di-main { flex: 1; }
 
 /* Sidebar */
 .di-sidebar {
@@ -115,22 +119,13 @@ button:disabled {
   .di-nav { grid-template-columns: 1fr 1fr; }
 }
 
-/* Desktop só a partir de 1024px */
-@media (min-width: 1024px) {
-  .di-layout {
-    flex-direction: row;
-    align-items: stretch;
-  }
-
+@media (min-width: 980px) {
   .di-sidebar {
     width: 240px;
     min-height: 100vh;
     border-bottom: none;
     border-right: 1px solid #e2e8f0;
-    position: sticky;
-    top: 0;
   }
-
   .di-nav { grid-template-columns: 1fr; }
 }
 
