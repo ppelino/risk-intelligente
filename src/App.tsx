@@ -1,65 +1,27 @@
-import { Routes, Route, Navigate } from "react-router-dom";
-
+import { Navigate, Route, Routes } from "react-router-dom";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Companies from "./pages/Companies";
-import Sectors from "./pages/Sectors";
-import Risks from "./pages/Risks";
-import Ergonomics from "./pages/Ergonomics";
-
-import RequireAuth from "./lib/RequireAuth";
+import AppShell from "./components/AppShell";
 
 export default function App() {
   return (
     <Routes>
+      {/* login */}
       <Route path="/login" element={<Login />} />
 
-      <Route
-        path="/dashboard"
-        element={
-          <RequireAuth>
-            <Dashboard />
-          </RequireAuth>
-        }
-      />
+      {/* tudo que tem menu lateral */}
+      <Route element={<AppShell />}>
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/companies" element={<Companies />} />
+        {/* depois a gente liga esses */}
+        {/* <Route path="/sectors" element={<Sectors />} /> */}
+        {/* <Route path="/risks" element={<Risks />} /> */}
+        {/* <Route path="/ergonomics" element={<Ergonomics />} /> */}
+      </Route>
 
-      <Route
-        path="/companies"
-        element={
-          <RequireAuth>
-            <Companies />
-          </RequireAuth>
-        }
-      />
-
-      <Route
-        path="/sectors"
-        element={
-          <RequireAuth>
-            <Sectors />
-          </RequireAuth>
-        }
-      />
-
-      <Route
-        path="/risks"
-        element={
-          <RequireAuth>
-            <Risks />
-          </RequireAuth>
-        }
-      />
-
-      <Route
-        path="/ergonomics"
-        element={
-          <RequireAuth>
-            <Ergonomics />
-          </RequireAuth>
-        }
-      />
-
-      <Route path="/" element={<Navigate to="/login" replace />} />
+      {/* fallback */}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
