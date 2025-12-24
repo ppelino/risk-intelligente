@@ -19,8 +19,12 @@ export default function Sectors() {
   const [companyId, setCompanyId] = useState("");
   const [sectorName, setSectorName] = useState("");
   const [roleName, setRoleName] = useState("");
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // ✅ modo edição
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const companiesMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -45,13 +49,31 @@ export default function Sectors() {
       .order("sector_name");
 
     if (s.error) return setError(s.error.message);
-    setSectors(s.data ?? []);
+    setSectors((s.data ?? []) as Sector[]);
   }
 
   useEffect(() => {
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function resetForm() {
+    setEditingId(null);
+    setSectorName("");
+    setRoleName("");
+    // mantém companyId selecionado (mais prático)
+  }
+
+  function startEdit(s: Sector) {
+    setError(null);
+    setEditingId(s.id);
+
+    setCompanyId(s.company_id);
+    setSectorName(s.sector_name ?? "");
+    setRoleName(s.role_name ?? "");
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -69,12 +91,32 @@ export default function Sectors() {
       return;
     }
 
-    const ins = await supabase.from("sectors").insert({
-      user_id: userId,
+    const payload = {
       company_id: companyId,
       sector_name: sectorName.trim(),
       role_name: roleName.trim() ? roleName.trim() : null,
-      // notes: null,
+    };
+
+    // ✅ UPDATE
+    if (editingId) {
+      const upd = await supabase.from("sectors").update(payload).eq("id", editingId);
+
+      if (upd.error) {
+        setError(upd.error.message);
+        setBusy(false);
+        return;
+      }
+
+      setBusy(false);
+      resetForm();
+      loadAll();
+      return;
+    }
+
+    // ✅ INSERT
+    const ins = await supabase.from("sectors").insert({
+      user_id: userId,
+      ...payload,
     });
 
     if (ins.error) {
@@ -83,8 +125,28 @@ export default function Sectors() {
       return;
     }
 
-    setSectorName("");
-    setRoleName("");
+    setBusy(false);
+    resetForm();
+    loadAll();
+  }
+
+  async function handleDelete(id: string) {
+    const ok = confirm("Excluir este setor/função? Essa ação não pode ser desfeita.");
+    if (!ok) return;
+
+    setBusy(true);
+    setError(null);
+
+    const del = await supabase.from("sectors").delete().eq("id", id);
+
+    if (del.error) {
+      setError(del.error.message);
+      setBusy(false);
+      return;
+    }
+
+    if (editingId === id) resetForm();
+
     setBusy(false);
     loadAll();
   }
@@ -103,12 +165,15 @@ export default function Sectors() {
           <div className="card" style={{ display: "grid", gap: 12 }}>
             <h1>Setores / Funções</h1>
 
+            {editingId && (
+              <div className="card" style={{ padding: 12 }}>
+                <strong>Modo edição ativo ✅</strong>
+                <div style={{ fontSize: 12, opacity: 0.75 }}>ID: {editingId}</div>
+              </div>
+            )}
+
             <form onSubmit={handleSave} style={{ display: "grid", gap: 10, maxWidth: 520 }}>
-              <select
-                value={companyId}
-                onChange={(e) => setCompanyId(e.target.value)}
-                style={{ padding: 10 }}
-              >
+              <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} style={{ padding: 10 }}>
                 <option value="">Selecione a empresa...</option>
                 {companies.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -131,15 +196,19 @@ export default function Sectors() {
                 style={{ padding: 10 }}
               />
 
-              <button type="submit" disabled={!canSave} style={{ padding: 10 }}>
-                {busy ? "Salvando..." : "Salvar"}
-              </button>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button type="submit" disabled={!canSave} style={{ padding: 10, flex: 1 }}>
+                  {busy ? "Salvando..." : editingId ? "Salvar alterações" : "Salvar"}
+                </button>
 
-              {error && (
-                <div style={{ color: "#b91c1c", fontWeight: 700 }}>
-                  Erro: {error}
-                </div>
-              )}
+                {editingId && (
+                  <button type="button" onClick={resetForm} disabled={busy} style={{ padding: 10, width: 160 }}>
+                    Cancelar
+                  </button>
+                )}
+              </div>
+
+              {error && <div style={{ color: "#b91c1c", fontWeight: 700 }}>Erro: {error}</div>}
             </form>
 
             <div style={{ marginTop: 10 }}>
@@ -148,11 +217,23 @@ export default function Sectors() {
               <div style={{ display: "grid", gap: 10 }}>
                 {filteredSectors.map((s) => (
                   <div key={s.id} className="card" style={{ padding: 12 }}>
-                    <div style={{ fontWeight: 800 }}>{s.sector_name}</div>
-                    {s.role_name && <div style={{ opacity: 0.8 }}>{s.role_name}</div>}
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                      <div>
+                        <div style={{ fontWeight: 800 }}>{s.sector_name}</div>
+                        {s.role_name && <div style={{ opacity: 0.8 }}>{s.role_name}</div>}
+                        <div style={{ fontSize: 12, opacity: 0.7 }}>
+                          Empresa: {companiesMap.get(s.company_id) ?? s.company_id}
+                        </div>
+                      </div>
 
-                    <div style={{ fontSize: 12, opacity: 0.7 }}>
-                      Empresa: {companiesMap.get(s.company_id) ?? s.company_id}
+                      <div style={{ display: "flex", gap: 8, alignItems: "start" }}>
+                        <button type="button" onClick={() => startEdit(s)} disabled={busy} style={{ padding: "6px 10px" }}>
+                          Editar
+                        </button>
+                        <button type="button" onClick={() => handleDelete(s.id)} disabled={busy} style={{ padding: "6px 10px" }}>
+                          Excluir
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
