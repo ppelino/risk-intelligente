@@ -4,7 +4,7 @@ import Dashboard from "./pages/Dashboard";
 import Companies from "./pages/Companies";
 import Sectors from "./pages/Sectors";
 import AppShell from "./components/AppShell";
-import RequireAuth from "./components/RequireAuth";
+import RequireAuth from "./lib/RequireAuth";
 
 export default function App() {
   return (
@@ -24,3 +24,4 @@ export default function App() {
     </Routes>
   );
 }
+
