@@ -13,19 +13,17 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
 
-      <Route
-        element={
-          <RequireAuth>
-            <AppShell />
-          </RequireAuth>
-        }
-      >
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/companies" element={<Companies />} />
-        <Route path="/sectors" element={<Sectors />} />
-        <Route path="/risks" element={<Risks />} />
-        <Route path="/ergonomics" element={<Ergonomics />} />
+      {/* 1) primeiro protege */}
+      <Route element={<RequireAuth />}>
+        {/* 2) depois aplica o layout */}
+        <Route element={<AppShell />}>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/companies" element={<Companies />} />
+          <Route path="/sectors" element={<Sectors />} />
+          <Route path="/risks" element={<Risks />} />
+          <Route path="/ergonomics" element={<Ergonomics />} />
+        </Route>
       </Route>
 
       <Route path="*" element={<Navigate to="/login" replace />} />
