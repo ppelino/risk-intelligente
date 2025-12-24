@@ -21,7 +21,7 @@ export default function Sidebar() {
 
   return (
     <aside className="di-sidebar">
-      <div className="di-brand">DataInsight SST</div>
+      <div className="di-brand">Risk-Intelligence</div>
 
       <nav className="di-nav">
         <Item to="/dashboard" label="Dashboard" />
@@ -33,3 +33,5 @@ export default function Sidebar() {
     </aside>
   );
 }
+
+
