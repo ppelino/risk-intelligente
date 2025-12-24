@@ -13,9 +13,8 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
 
-      {/* 1) primeiro protege */}
+      {/* Protege tudo aqui */}
       <Route element={<RequireAuth />}>
-        {/* 2) depois aplica o layout */}
         <Route element={<AppShell />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard />} />
