@@ -17,6 +17,9 @@ export default function Companies() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // ✅ modo edição
+  const [editingId, setEditingId] = useState<string | null>(null);
+
   // Form
   const [name, setName] = useState("");
   const [cnpj, setCnpj] = useState("");
@@ -48,7 +51,27 @@ export default function Companies() {
     loadCompanies();
   }, []);
 
-  async function handleCreateCompany(e: React.FormEvent) {
+  function resetForm() {
+    setEditingId(null);
+    setName("");
+    setCnpj("");
+    setCity("");
+    setStateUF("");
+  }
+
+  function startEdit(c: CompanyRow) {
+    setError(null);
+    setEditingId(c.id);
+
+    setName(c.name ?? "");
+    setCnpj(c.cnpj ?? "");
+    setCity(c.city ?? "");
+    setStateUF(c.state ?? "");
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function handleCreateOrUpdateCompany(e: React.FormEvent) {
     e.preventDefault();
     if (!canSave) return;
 
@@ -64,14 +87,35 @@ export default function Companies() {
     }
 
     const payload = {
-      user_id: authData.user.id, // importante p/ RLS
       name: name.trim(),
       cnpj: cnpj.trim() || null,
       city: city.trim() || null,
       state: stateUF.trim().toUpperCase() || null,
     };
 
-    const { error: insertErr } = await supabase.from("companies").insert(payload);
+    // ✅ UPDATE
+    if (editingId) {
+      const { error: updErr } = await supabase.from("companies").update(payload).eq("id", editingId);
+
+      if (updErr) {
+        setError(updErr.message);
+        setSaving(false);
+        return;
+      }
+
+      resetForm();
+      await loadCompanies();
+      setSaving(false);
+      return;
+    }
+
+    // ✅ INSERT
+    const insertPayload = {
+      user_id: authData.user.id, // importante p/ RLS
+      ...payload,
+    };
+
+    const { error: insertErr } = await supabase.from("companies").insert(insertPayload);
 
     if (insertErr) {
       setError(insertErr.message);
@@ -79,11 +123,27 @@ export default function Companies() {
       return;
     }
 
-    // limpa form + recarrega lista
-    setName("");
-    setCnpj("");
-    setCity("");
-    setStateUF("");
+    resetForm();
+    await loadCompanies();
+    setSaving(false);
+  }
+
+  async function handleDeleteCompany(id: string) {
+    const ok = confirm("Excluir esta empresa? Essa ação não pode ser desfeita.");
+    if (!ok) return;
+
+    setSaving(true);
+    setError(null);
+
+    const { error: delErr } = await supabase.from("companies").delete().eq("id", id);
+
+    if (delErr) {
+      setError(delErr.message);
+      setSaving(false);
+      return;
+    }
+
+    if (editingId === id) resetForm();
 
     await loadCompanies();
     setSaving(false);
@@ -92,7 +152,7 @@ export default function Companies() {
   return (
     <div style={{ padding: 24 }}>
       <h1 style={{ marginTop: 0 }}>Empresas</h1>
-      <p>Página base OK ✅ (agora CRUD do Supabase)</p>
+      <p>Página base OK ✅ (CRUD do Supabase)</p>
 
       <div
         style={{
@@ -103,9 +163,9 @@ export default function Companies() {
           marginTop: 16,
         }}
       >
-        {/* FORM CREATE */}
+        {/* FORM */}
         <form
-          onSubmit={handleCreateCompany}
+          onSubmit={handleCreateOrUpdateCompany}
           style={{
             background: "#fff",
             border: "1px solid #e5e7eb",
@@ -113,7 +173,13 @@ export default function Companies() {
             padding: 16,
           }}
         >
-          <h3 style={{ marginTop: 0 }}>Adicionar empresa</h3>
+          <h3 style={{ marginTop: 0 }}>{editingId ? "Editar empresa" : "Adicionar empresa"}</h3>
+
+          {editingId && (
+            <div style={{ marginBottom: 10, fontSize: 12, opacity: 0.75 }}>
+              Editando ID: <strong>{editingId}</strong>
+            </div>
+          )}
 
           <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>
             Nome *
@@ -161,22 +227,43 @@ export default function Companies() {
             </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={!canSave}
-            style={{
-              width: "100%",
-              padding: 12,
-              borderRadius: 10,
-              border: "none",
-              background: canSave ? "#111827" : "#9ca3af",
-              color: "#fff",
-              cursor: canSave ? "pointer" : "not-allowed",
-              fontWeight: 700,
-            }}
-          >
-            {saving ? "Salvando..." : "Salvar empresa"}
-          </button>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button
+              type="submit"
+              disabled={!canSave}
+              style={{
+                flex: 1,
+                padding: 12,
+                borderRadius: 10,
+                border: "none",
+                background: canSave ? "#111827" : "#9ca3af",
+                color: "#fff",
+                cursor: canSave ? "pointer" : "not-allowed",
+                fontWeight: 700,
+              }}
+            >
+              {saving ? "Salvando..." : editingId ? "Salvar alterações" : "Salvar empresa"}
+            </button>
+
+            {editingId && (
+              <button
+                type="button"
+                onClick={resetForm}
+                disabled={saving}
+                style={{
+                  width: 140,
+                  padding: 12,
+                  borderRadius: 10,
+                  border: "1px solid #e5e7eb",
+                  background: "#fff",
+                  cursor: saving ? "not-allowed" : "pointer",
+                  fontWeight: 700,
+                }}
+              >
+                Cancelar
+              </button>
+            )}
+          </div>
 
           {error && (
             <div style={{ marginTop: 12, color: "#b91c1c", fontWeight: 600 }}>
@@ -226,10 +313,48 @@ export default function Companies() {
                     padding: 12,
                   }}
                 >
-                  <div style={{ fontWeight: 800, fontSize: 16 }}>{c.name}</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                    <div style={{ fontWeight: 800, fontSize: 16 }}>{c.name}</div>
+
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        type="button"
+                        onClick={() => startEdit(c)}
+                        disabled={saving}
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: 10,
+                          border: "1px solid #e5e7eb",
+                          background: "#fff",
+                          cursor: "pointer",
+                          fontWeight: 700,
+                        }}
+                      >
+                        Editar
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCompany(c.id)}
+                        disabled={saving}
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: 10,
+                          border: "1px solid #e5e7eb",
+                          background: "#fff",
+                          cursor: "pointer",
+                          fontWeight: 700,
+                        }}
+                      >
+                        Excluir
+                      </button>
+                    </div>
+                  </div>
+
                   <div style={{ opacity: 0.85, marginTop: 4 }}>
                     {c.city ?? "-"} / {c.state ?? "-"} • CNPJ: {c.cnpj ?? "-"}
                   </div>
+
                   <div style={{ opacity: 0.6, marginTop: 6, fontSize: 12 }}>
                     id: {c.id}
                   </div>
@@ -241,7 +366,7 @@ export default function Companies() {
       </div>
 
       <div style={{ marginTop: 12, opacity: 0.7, fontSize: 12 }}>
-        Dica: se der erro de RLS no insert, falta policy de INSERT.
+        Dica: se der erro de RLS no update/delete, falta policy de UPDATE/DELETE.
       </div>
     </div>
   );
