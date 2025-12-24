@@ -8,7 +8,6 @@ import Risks from "./pages/Risks";
 import Ergonomics from "./pages/Ergonomics";
 
 import RequireAuth from "./lib/RequireAuth";
-import AppShell from "./components/AppShell";
 
 export default function App() {
   return (
@@ -16,21 +15,51 @@ export default function App() {
       <Route path="/login" element={<Login />} />
 
       <Route
-        path="/"
+        path="/dashboard"
         element={
           <RequireAuth>
-            <AppShell />
+            <Dashboard />
           </RequireAuth>
         }
-      >
-        <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="companies" element={<Companies />} />
-        <Route path="sectors" element={<Sectors />} />
-        <Route path="risks" element={<Risks />} />
-        <Route path="ergonomics" element={<Ergonomics />} />
-      </Route>
+      />
 
+      <Route
+        path="/companies"
+        element={
+          <RequireAuth>
+            <Companies />
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/sectors"
+        element={
+          <RequireAuth>
+            <Sectors />
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/risks"
+        element={
+          <RequireAuth>
+            <Risks />
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/ergonomics"
+        element={
+          <RequireAuth>
+            <Ergonomics />
+          </RequireAuth>
+        }
+      />
+
+      <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
