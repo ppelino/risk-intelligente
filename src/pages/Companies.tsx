@@ -11,313 +11,227 @@ type CompanyRow = {
   created_at: string;
 };
 
-type CompanyForm = {
-  name: string;
-  cnpj: string;
-  city: string;
-  state: string;
-};
-
-const emptyForm: CompanyForm = { name: "", cnpj: "", city: "", state: "" };
-
 export default function Companies() {
-  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
-
+  const [companies, setCompanies] = useState<CompanyRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  const [items, setItems] = useState<CompanyRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const [form, setForm] = useState<CompanyForm>(emptyForm);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  // Form
+  const [name, setName] = useState("");
+  const [cnpj, setCnpj] = useState("");
+  const [city, setCity] = useState("");
+  const [stateUF, setStateUF] = useState("");
 
-  const isEditing = useMemo(() => Boolean(editingId), [editingId]);
+  const canSave = useMemo(() => name.trim().length >= 2 && !saving, [name, saving]);
 
-  useEffect(() => {
-    let active = true;
-
-    async function init() {
-      setLoading(true);
-      setError(null);
-
-      const { data } = await supabase.auth.getSession();
-      const uid = data.session?.user?.id ?? null;
-
-      if (!active) return;
-
-      setSessionUserId(uid);
-
-      // Se não tem login ainda, NÃO quebra: só para aqui.
-      if (!uid) {
-        setItems([]);
-        setLoading(false);
-        return;
-      }
-
-      await fetchCompanies(uid);
-      setLoading(false);
-    }
-
-    init();
-
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
-      const uid = newSession?.user?.id ?? null;
-      if (!active) return;
-
-      setSessionUserId(uid);
-      setEditingId(null);
-      setForm(emptyForm);
-
-      if (!uid) {
-        setItems([]);
-        return;
-      }
-
-      setLoading(true);
-      await fetchCompanies(uid);
-      setLoading(false);
-    });
-
-    return () => {
-      active = false;
-      sub.subscription.unsubscribe();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function fetchCompanies(uid: string) {
+  async function loadCompanies() {
+    setLoading(true);
     setError(null);
 
     const { data, error } = await supabase
       .from("companies")
-      .select("*")
-      .eq("user_id", uid)
+      .select("id, user_id, name, cnpj, city, state, created_at")
       .order("created_at", { ascending: false });
 
     if (error) {
       setError(error.message);
-      setItems([]);
-      return;
+      setCompanies([]);
+    } else {
+      setCompanies((data ?? []) as CompanyRow[]);
     }
 
-    setItems((data ?? []) as CompanyRow[]);
+    setLoading(false);
   }
 
-  function onChange<K extends keyof CompanyForm>(key: K, value: CompanyForm[K]) {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  }
+  useEffect(() => {
+    loadCompanies();
+  }, []);
 
-  function startNew() {
-    setEditingId(null);
-    setForm(emptyForm);
-    setError(null);
-  }
-
-  function startEdit(row: CompanyRow) {
-    setEditingId(row.id);
-    setForm({
-      name: row.name ?? "",
-      cnpj: row.cnpj ?? "",
-      city: row.city ?? "",
-      state: row.state ?? "",
-    });
-    setError(null);
-  }
-
-  async function save() {
-    if (!sessionUserId) {
-      setError("Você precisa estar logado para salvar empresas.");
-      return;
-    }
-
-    if (!form.name.trim()) {
-      setError("Nome da empresa é obrigatório.");
-      return;
-    }
+  async function handleCreateCompany(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canSave) return;
 
     setSaving(true);
     setError(null);
 
-    try {
-      if (!isEditing) {
-        const payload = {
-          user_id: sessionUserId,
-          name: form.name.trim(),
-          cnpj: form.cnpj.trim() || null,
-          city: form.city.trim() || null,
-          state: form.state.trim() || null,
-        };
-
-        const { error } = await supabase.from("companies").insert(payload);
-        if (error) throw error;
-
-        await fetchCompanies(sessionUserId);
-        setForm(emptyForm);
-      } else {
-        const payload = {
-          name: form.name.trim(),
-          cnpj: form.cnpj.trim() || null,
-          city: form.city.trim() || null,
-          state: form.state.trim() || null,
-        };
-
-        const { error } = await supabase
-          .from("companies")
-          .update(payload)
-          .eq("id", editingId)
-          .eq("user_id", sessionUserId);
-
-        if (error) throw error;
-
-        await fetchCompanies(sessionUserId);
-        setEditingId(null);
-        setForm(emptyForm);
-      }
-    } catch (e: any) {
-      setError(e?.message ?? "Erro ao salvar.");
-    } finally {
+    // Quem está logado
+    const { data: authData, error: authErr } = await supabase.auth.getUser();
+    if (authErr || !authData?.user) {
       setSaving(false);
-    }
-  }
-
-  async function remove(row: CompanyRow) {
-    if (!sessionUserId) {
-      setError("Você precisa estar logado para excluir empresas.");
+      setError("Você não está logado. Faça login novamente.");
       return;
     }
 
-    const ok = confirm(`Excluir a empresa "${row.name}"?`);
-    if (!ok) return;
+    const payload = {
+      user_id: authData.user.id, // importante p/ RLS
+      name: name.trim(),
+      cnpj: cnpj.trim() || null,
+      city: city.trim() || null,
+      state: stateUF.trim().toUpperCase() || null,
+    };
 
-    setSaving(true);
-    setError(null);
+    const { error: insertErr } = await supabase.from("companies").insert(payload);
 
-    try {
-      const { error } = await supabase
-        .from("companies")
-        .delete()
-        .eq("id", row.id)
-        .eq("user_id", sessionUserId);
-
-      if (error) throw error;
-
-      await fetchCompanies(sessionUserId);
-      if (editingId === row.id) {
-        setEditingId(null);
-        setForm(emptyForm);
-      }
-    } catch (e: any) {
-      setError(e?.message ?? "Erro ao excluir.");
-    } finally {
+    if (insertErr) {
+      setError(insertErr.message);
       setSaving(false);
+      return;
     }
+
+    // limpa form + recarrega lista
+    setName("");
+    setCnpj("");
+    setCity("");
+    setStateUF("");
+
+    await loadCompanies();
+    setSaving(false);
   }
 
   return (
     <div style={{ padding: 24 }}>
       <h1 style={{ marginTop: 0 }}>Empresas</h1>
+      <p>Página base OK ✅ (agora CRUD do Supabase)</p>
 
-      {!sessionUserId && (
-        <div style={{ padding: 12, borderRadius: 10, background: "#fff3cd", marginBottom: 12 }}>
-          Você ainda não está logado no Supabase.  
-          **O CRUD vai funcionar assim que a autenticação estiver ativa.**
-        </div>
-      )}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "420px 1fr",
+          gap: 20,
+          alignItems: "start",
+          marginTop: 16,
+        }}
+      >
+        {/* FORM CREATE */}
+        <form
+          onSubmit={handleCreateCompany}
+          style={{
+            background: "#fff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 12,
+            padding: 16,
+          }}
+        >
+          <h3 style={{ marginTop: 0 }}>Adicionar empresa</h3>
 
-      {error && (
-        <div style={{ padding: 12, borderRadius: 10, background: "#ffe3e3", marginBottom: 12 }}>
-          {error}
-        </div>
-      )}
+          <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>
+            Nome *
+          </label>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Ex: Metalúrgica Alfa"
+            style={{ width: "100%", padding: 10, marginBottom: 12 }}
+          />
 
-      <div style={{ display: "grid", gridTemplateColumns: "420px 1fr", gap: 18, alignItems: "start" }}>
-        {/* Form */}
-        <div style={{ background: "white", borderRadius: 14, padding: 16, boxShadow: "0 1px 10px rgba(0,0,0,0.06)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-            <h2 style={{ margin: 0, fontSize: 18 }}>{isEditing ? "Editar empresa" : "Nova empresa"}</h2>
-            <button onClick={startNew} disabled={saving} style={btnLight}>
-              Limpar
-            </button>
-          </div>
+          <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>
+            CNPJ
+          </label>
+          <input
+            value={cnpj}
+            onChange={(e) => setCnpj(e.target.value)}
+            placeholder="Somente números ou com máscara"
+            style={{ width: "100%", padding: 10, marginBottom: 12 }}
+          />
 
-          <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-            <label style={label}>
-              Nome *
-              <input
-                value={form.name}
-                onChange={(e) => onChange("name", e.target.value)}
-                placeholder="Ex: Metalúrgica Alfa"
-                style={input}
-              />
-            </label>
-
-            <label style={label}>
-              CNPJ
-              <input
-                value={form.cnpj}
-                onChange={(e) => onChange("cnpj", e.target.value)}
-                placeholder="Somente números ou com máscara"
-                style={input}
-              />
-            </label>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: 10 }}>
-              <label style={label}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: 10 }}>
+            <div>
+              <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>
                 Cidade
-                <input value={form.city} onChange={(e) => onChange("city", e.target.value)} placeholder="Ex: Poá" style={input} />
               </label>
-
-              <label style={label}>
-                UF
-                <input value={form.state} onChange={(e) => onChange("state", e.target.value)} placeholder="SP" style={input} />
-              </label>
+              <input
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder="Ex: Poá"
+                style={{ width: "100%", padding: 10, marginBottom: 12 }}
+              />
             </div>
-
-            <button onClick={save} disabled={saving || loading} style={btnPrimary}>
-              {saving ? "Salvando..." : isEditing ? "Salvar alterações" : "Criar empresa"}
-            </button>
+            <div>
+              <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>
+                UF
+              </label>
+              <input
+                value={stateUF}
+                onChange={(e) => setStateUF(e.target.value)}
+                placeholder="SP"
+                maxLength={2}
+                style={{ width: "100%", padding: 10, marginBottom: 12, textTransform: "uppercase" }}
+              />
+            </div>
           </div>
-        </div>
 
-        {/* List */}
-        <div style={{ background: "white", borderRadius: 14, padding: 16, boxShadow: "0 1px 10px rgba(0,0,0,0.06)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <h2 style={{ margin: 0, fontSize: 18 }}>Lista</h2>
+          <button
+            type="submit"
+            disabled={!canSave}
+            style={{
+              width: "100%",
+              padding: 12,
+              borderRadius: 10,
+              border: "none",
+              background: canSave ? "#111827" : "#9ca3af",
+              color: "#fff",
+              cursor: canSave ? "pointer" : "not-allowed",
+              fontWeight: 700,
+            }}
+          >
+            {saving ? "Salvando..." : "Salvar empresa"}
+          </button>
+
+          {error && (
+            <div style={{ marginTop: 12, color: "#b91c1c", fontWeight: 600 }}>
+              Erro: {error}
+            </div>
+          )}
+        </form>
+
+        {/* LISTAGEM */}
+        <div
+          style={{
+            background: "#fff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 12,
+            padding: 16,
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h3 style={{ marginTop: 0 }}>Lista</h3>
             <button
-              onClick={() => sessionUserId && fetchCompanies(sessionUserId)}
-              disabled={loading || saving || !sessionUserId}
-              style={btnLight}
-              title={!sessionUserId ? "Faça login para carregar do Supabase" : "Atualizar"}
+              onClick={loadCompanies}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 10,
+                border: "1px solid #e5e7eb",
+                background: "#fff",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
             >
-              Atualizar
+              Recarregar
             </button>
           </div>
 
           {loading ? (
-            <div>Carregando…</div>
-          ) : items.length === 0 ? (
-            <div style={{ color: "#666" }}>Nenhuma empresa ainda.</div>
+            <p>Carregando...</p>
+          ) : companies.length === 0 ? (
+            <p>Nenhuma empresa cadastrada ainda.</p>
           ) : (
             <div style={{ display: "grid", gap: 10 }}>
-              {items.map((row) => (
-                <div key={row.id} style={card}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                    <div>
-                      <div style={{ fontWeight: 700 }}>{row.name}</div>
-                      <div style={{ color: "#555", fontSize: 13 }}>
-                        {row.city ?? "-"} / {row.state ?? "-"} • CNPJ: {row.cnpj ?? "-"}
-                      </div>
-                    </div>
-
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button onClick={() => startEdit(row)} disabled={saving} style={btnLight}>
-                        Editar
-                      </button>
-                      <button onClick={() => remove(row)} disabled={saving} style={btnDanger}>
-                        Excluir
-                      </button>
-                    </div>
+              {companies.map((c) => (
+                <div
+                  key={c.id}
+                  style={{
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 12,
+                    padding: 12,
+                  }}
+                >
+                  <div style={{ fontWeight: 800, fontSize: 16 }}>{c.name}</div>
+                  <div style={{ opacity: 0.85, marginTop: 4 }}>
+                    {c.city ?? "-"} / {c.state ?? "-"} • CNPJ: {c.cnpj ?? "-"}
+                  </div>
+                  <div style={{ opacity: 0.6, marginTop: 6, fontSize: 12 }}>
+                    id: {c.id}
                   </div>
                 </div>
               ))}
@@ -326,60 +240,9 @@ export default function Companies() {
         </div>
       </div>
 
-      <p style={{ marginTop: 14, color: "#666", fontSize: 12 }}>
-        Próximo passo: ao clicar em uma empresa, vamos abrir Setores/Funções filtrando por company_id.
-      </p>
+      <div style={{ marginTop: 12, opacity: 0.7, fontSize: 12 }}>
+        Dica: se der erro de RLS no insert, falta policy de INSERT.
+      </div>
     </div>
   );
 }
-
-const input: React.CSSProperties = {
-  width: "100%",
-  padding: "10px 12px",
-  borderRadius: 10,
-  border: "1px solid #e5e7eb",
-  outline: "none",
-};
-
-const label: React.CSSProperties = {
-  fontSize: 13,
-  color: "#222",
-  display: "grid",
-  gap: 6,
-};
-
-const btnPrimary: React.CSSProperties = {
-  padding: "10px 12px",
-  borderRadius: 10,
-  border: "none",
-  cursor: "pointer",
-  background: "#0f172a",
-  color: "white",
-  fontWeight: 700,
-};
-
-const btnLight: React.CSSProperties = {
-  padding: "8px 10px",
-  borderRadius: 10,
-  border: "1px solid #e5e7eb",
-  cursor: "pointer",
-  background: "white",
-  fontWeight: 600,
-};
-
-const btnDanger: React.CSSProperties = {
-  padding: "8px 10px",
-  borderRadius: 10,
-  border: "1px solid #fecaca",
-  cursor: "pointer",
-  background: "#fff1f2",
-  color: "#991b1b",
-  fontWeight: 700,
-};
-
-const card: React.CSSProperties = {
-  border: "1px solid #e5e7eb",
-  borderRadius: 12,
-  padding: 12,
-};
-
