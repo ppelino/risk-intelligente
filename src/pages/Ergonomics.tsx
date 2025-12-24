@@ -52,6 +52,9 @@ export default function Ergonomics() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // ✅ ID do item que está sendo editado (null = modo “novo”)
+  const [editingId, setEditingId] = useState<string | null>(null);
+
   const canSave = useMemo(() => {
     return (
       companyId &&
@@ -63,7 +66,6 @@ export default function Ergonomics() {
   }, [companyId, workerName, roleName, workstation, busy]);
 
   const score = useMemo(() => {
-    // score simples (média). Depois a gente troca por fórmula NR-17 que você quiser.
     const sum =
       posture +
       repetitive +
@@ -118,6 +120,49 @@ export default function Ergonomics() {
     loadBase();
   }, []);
 
+  function resetForm() {
+    setEditingId(null);
+    setWorkerName("");
+    setRoleName("");
+    setWorkstation("");
+    setNotes("");
+    setRecommendedActions("");
+    setPosture(2);
+    setRepetitive(2);
+    setForceEffort(2);
+    setLiftingLoad(2);
+    setPacePressure(2);
+    setBreaks(2);
+    setEnvironment(2);
+    setOrganization(2);
+    // mantém empresa/setor selecionados (fica mais prático)
+  }
+
+  function startEdit(it: Erg) {
+    setError(null);
+    setEditingId(it.id);
+
+    setCompanyId(it.company_id);
+    setSectorId(it.sector_id ?? "");
+
+    setWorkerName(it.worker_name ?? "");
+    setRoleName(it.role_name ?? "");
+    setWorkstation(it.workstation ?? "");
+
+    setPosture(it.posture ?? 2);
+    setRepetitive(it.repetitive ?? 2);
+    setForceEffort(it.force_effort ?? 2);
+    setLiftingLoad(it.lifting_load ?? 2);
+    setPacePressure(it.pace_pressure ?? 2);
+    setBreaks(it.breaks ?? 2);
+    setEnvironment(it.environment ?? 2);
+    setOrganization(it.organization ?? 2);
+
+    setNotes(it.notes ?? "");
+    setRecommendedActions(it.recommended_actions ?? "");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!canSave) return;
@@ -132,8 +177,8 @@ export default function Ergonomics() {
       return;
     }
 
-    const ins = await supabase.from("ergonomics").insert({
-      user_id: auth.user.id,
+    const payload = {
+      // user_id só no insert; no update não precisa mexer
       company_id: companyId,
       sector_id: sectorId || null,
       worker_name: workerName.trim(),
@@ -149,6 +194,31 @@ export default function Ergonomics() {
       organization,
       notes: notes.trim() ? notes.trim() : null,
       recommended_actions: recommendedActions.trim() ? recommendedActions.trim() : null,
+    };
+
+    // ✅ UPDATE (modo edição)
+    if (editingId) {
+      const upd = await supabase
+        .from("ergonomics")
+        .update(payload)
+        .eq("id", editingId);
+
+      if (upd.error) {
+        setError(upd.error.message);
+        setBusy(false);
+        return;
+      }
+
+      setBusy(false);
+      resetForm();
+      loadBase();
+      return;
+    }
+
+    // ✅ INSERT (modo novo)
+    const ins = await supabase.from("ergonomics").insert({
+      user_id: auth.user.id,
+      ...payload,
     });
 
     if (ins.error) {
@@ -157,19 +227,27 @@ export default function Ergonomics() {
       return;
     }
 
-    setWorkerName("");
-    setRoleName("");
-    setWorkstation("");
-    setNotes("");
-    setRecommendedActions("");
-    setPosture(2);
-    setRepetitive(2);
-    setForceEffort(2);
-    setLiftingLoad(2);
-    setPacePressure(2);
-    setBreaks(2);
-    setEnvironment(2);
-    setOrganization(2);
+    setBusy(false);
+    resetForm();
+    loadBase();
+  }
+
+  async function handleDelete(id: string) {
+    const ok = confirm("Excluir esta avaliação NR-17? Essa ação não pode ser desfeita.");
+    if (!ok) return;
+
+    setBusy(true);
+    setError(null);
+
+    const del = await supabase.from("ergonomics").delete().eq("id", id);
+    if (del.error) {
+      setError(del.error.message);
+      setBusy(false);
+      return;
+    }
+
+    // se estava editando esse item, sai do modo edição
+    if (editingId === id) resetForm();
 
     setBusy(false);
     loadBase();
@@ -188,6 +266,11 @@ export default function Ergonomics() {
 
             <div className="card" style={{ padding: 12 }}>
               <strong>Score (média 1–5):</strong> {score}
+              {editingId && (
+                <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
+                  Modo edição ativo ✅ (ID: {editingId})
+                </div>
+              )}
             </div>
 
             <form onSubmit={handleSave} style={{ display: "grid", gap: 10, maxWidth: 820 }}>
@@ -236,9 +319,22 @@ export default function Ergonomics() {
               <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observações (opcional)" style={{ padding: 10 }} />
               <input value={recommendedActions} onChange={(e) => setRecommendedActions(e.target.value)} placeholder="Ações recomendadas (opcional)" style={{ padding: 10 }} />
 
-              <button type="submit" disabled={!canSave} style={{ padding: 10 }}>
-                {busy ? "Salvando..." : "Salvar avaliação NR-17"}
-              </button>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button type="submit" disabled={!canSave} style={{ padding: 10, flex: 1 }}>
+                  {busy ? "Salvando..." : editingId ? "Salvar alterações" : "Salvar avaliação NR-17"}
+                </button>
+
+                {editingId && (
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    disabled={busy}
+                    style={{ padding: 10, width: 180 }}
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
 
               {error && <div style={{ color: "#b91c1c", fontWeight: 700 }}>Erro: {error}</div>}
             </form>
@@ -248,7 +344,26 @@ export default function Ergonomics() {
               <div style={{ display: "grid", gap: 10 }}>
                 {items.map((it) => (
                   <div key={it.id} className="card" style={{ padding: 12 }}>
-                    <div style={{ fontWeight: 800 }}>{it.worker_name} — {it.role_name}</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                      <div style={{ fontWeight: 800 }}>
+                        {it.worker_name} — {it.role_name}
+                      </div>
+
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button type="button" onClick={() => startEdit(it)} disabled={busy} style={{ padding: "6px 10px" }}>
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(it.id)}
+                          disabled={busy}
+                          style={{ padding: "6px 10px" }}
+                        >
+                          Excluir
+                        </button>
+                      </div>
+                    </div>
+
                     <div style={{ opacity: 0.85 }}>Posto: {it.workstation}</div>
                     <div style={{ fontSize: 12, opacity: 0.7 }}>
                       P:{it.posture} R:{it.repetitive} F:{it.force_effort} C:{it.lifting_load} Rit:{it.pace_pressure} Pa:{it.breaks} Amb:{it.environment} Org:{it.organization}
@@ -266,4 +381,3 @@ export default function Ergonomics() {
     </div>
   );
 }
-
