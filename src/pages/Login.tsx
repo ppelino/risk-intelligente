@@ -1,24 +1,33 @@
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 export default function Login() {
-  return (
-    <div className="di-layout">
-      <main className="di-main">
-        <div className="container">
-          <div className="card" style={{ display: "grid", gap: 10 }}>
-            <h1>Login</h1>
-            <p>Se você está vendo isso, o Router está OK.</p>
+  const navigate = useNavigate();
 
-            {/* Por enquanto é só navegação (depois entra Supabase aqui) */}
-            <Link to="/dashboard" style={{ fontWeight: 700 }}>
-              Ir para Dashboard
-            </Link>
-          </div>
-        </div>
-      </main>
+  return (
+    <div style={{ maxWidth: 720, margin: "40px auto", padding: 16 }}>
+      <div style={{ background: "#fff", borderRadius: 14, padding: 18, border: "1px solid #e5e7eb" }}>
+        <h1 style={{ marginTop: 0 }}>Login</h1>
+        <p>Se você está vendo isso, o Router está OK.</p>
+
+        <button
+          onClick={() => navigate("/dashboard")}
+          style={{
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: "1px solid #0f172a",
+            background: "#0f172a",
+            color: "#fff",
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          Ir para Dashboard
+        </button>
+      </div>
     </div>
   );
 }
+
 
 
 
