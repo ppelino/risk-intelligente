@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { supabase } from "../lib/supabase";
-import RequireAuth from "./lib/RequireAuth";
+import { supabase } from "./supabase";
 
 export default function RequireAuth() {
   const location = useLocation();
@@ -35,4 +34,3 @@ export default function RequireAuth() {
 
   return <Outlet />;
 }
-
