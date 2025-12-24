@@ -31,12 +31,15 @@ export default function Risks() {
   const [riskDescription, setRiskDescription] = useState("");
   const [riskType, setRiskType] = useState("");
   const [existingControls, setExistingControls] = useState("");
-  const [recommendedActions, setRecommendedActions] = useState(""); // ✅ plural
+  const [recommendedActions, setRecommendedActions] = useState("");
   const [probability, setProbability] = useState(1);
   const [severity, setSeverity] = useState(1);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // ✅ modo edição
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const canSave = useMemo(() => {
     return companyId && hazard.trim() && riskDescription.trim() && !busy;
@@ -49,10 +52,7 @@ export default function Risks() {
     if (c.error) return setError(c.error.message);
     setCompanies(c.data ?? []);
 
-    const s = await supabase
-      .from("sectors")
-      .select("id,sector_name,company_id")
-      .order("sector_name");
+    const s = await supabase.from("sectors").select("id,sector_name,company_id").order("sector_name");
     if (s.error) return setError(s.error.message);
     setSectors(s.data ?? []);
 
@@ -71,6 +71,36 @@ export default function Risks() {
     loadBase();
   }, []);
 
+  function resetForm() {
+    setEditingId(null);
+    setHazard("");
+    setRiskDescription("");
+    setRiskType("");
+    setExistingControls("");
+    setRecommendedActions("");
+    setProbability(1);
+    setSeverity(1);
+    // Mantém empresa/setor selecionados (mais prático)
+  }
+
+  function startEdit(r: Risk) {
+    setError(null);
+    setEditingId(r.id);
+
+    setCompanyId(r.company_id);
+    setSectorId(r.sector_id ?? "");
+
+    setHazard(r.hazard ?? "");
+    setRiskDescription(r.risk_description ?? "");
+    setRiskType(r.risk_type ?? "");
+    setExistingControls(r.existing_controls ?? "");
+    setRecommendedActions(r.recommended_actions ?? "");
+    setProbability(r.probability ?? 1);
+    setSeverity(r.severity ?? 1);
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!canSave) return;
@@ -85,17 +115,38 @@ export default function Risks() {
       return;
     }
 
-    const ins = await supabase.from("risks").insert({
-      user_id: auth.user.id,
+    const payload = {
       company_id: companyId,
       sector_id: sectorId || null,
       hazard: hazard.trim(),
       risk_description: riskDescription.trim(),
       risk_type: riskType.trim() ? riskType.trim() : null,
       existing_controls: existingControls.trim() ? existingControls.trim() : null,
-      recommended_actions: recommendedActions.trim() ? recommendedActions.trim() : null, // ✅ PLURAL
+      recommended_actions: recommendedActions.trim() ? recommendedActions.trim() : null,
       probability,
       severity,
+    };
+
+    // ✅ UPDATE (modo edição)
+    if (editingId) {
+      const upd = await supabase.from("risks").update(payload).eq("id", editingId);
+
+      if (upd.error) {
+        setError(upd.error.message);
+        setBusy(false);
+        return;
+      }
+
+      setBusy(false);
+      resetForm();
+      loadBase();
+      return;
+    }
+
+    // ✅ INSERT (modo novo)
+    const ins = await supabase.from("risks").insert({
+      user_id: auth.user.id,
+      ...payload,
     });
 
     if (ins.error) {
@@ -104,15 +155,28 @@ export default function Risks() {
       return;
     }
 
-    setHazard("");
-    setRiskDescription("");
-    setRiskType("");
-    setExistingControls("");
-    setRecommendedActions("");
-    setProbability(1);
-    setSeverity(1);
     setBusy(false);
+    resetForm();
+    loadBase();
+  }
 
+  async function handleDelete(id: string) {
+    const ok = confirm("Excluir este risco? Essa ação não pode ser desfeita.");
+    if (!ok) return;
+
+    setBusy(true);
+    setError(null);
+
+    const del = await supabase.from("risks").delete().eq("id", id);
+    if (del.error) {
+      setError(del.error.message);
+      setBusy(false);
+      return;
+    }
+
+    if (editingId === id) resetForm();
+
+    setBusy(false);
     loadBase();
   }
 
@@ -126,22 +190,25 @@ export default function Risks() {
           <div className="card" style={{ display: "grid", gap: 12 }}>
             <h1>Riscos – PGR / NR-01</h1>
 
+            {editingId && (
+              <div className="card" style={{ padding: 12 }}>
+                <strong>Modo edição ativo ✅</strong>
+                <div style={{ fontSize: 12, opacity: 0.75 }}>ID: {editingId}</div>
+              </div>
+            )}
+
             <form onSubmit={handleSave} style={{ display: "grid", gap: 10, maxWidth: 720 }}>
               <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} style={{ padding: 10 }}>
                 <option value="">Empresa</option>
                 {companies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
+                  <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
 
               <select value={sectorId} onChange={(e) => setSectorId(e.target.value)} style={{ padding: 10 }}>
                 <option value="">Setor (opcional)</option>
                 {filteredSectors.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.sector_name}
-                  </option>
+                  <option key={s.id} value={s.id}>{s.sector_name}</option>
                 ))}
               </select>
 
@@ -197,9 +264,17 @@ export default function Risks() {
                 style={{ padding: 10 }}
               />
 
-              <button type="submit" disabled={!canSave} style={{ padding: 10 }}>
-                {busy ? "Salvando..." : "Salvar risco"}
-              </button>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button type="submit" disabled={!canSave} style={{ padding: 10, flex: 1 }}>
+                  {busy ? "Salvando..." : editingId ? "Salvar alterações" : "Salvar risco"}
+                </button>
+
+                {editingId && (
+                  <button type="button" onClick={resetForm} disabled={busy} style={{ padding: 10, width: 180 }}>
+                    Cancelar
+                  </button>
+                )}
+              </div>
 
               {error && <div style={{ color: "#b91c1c", fontWeight: 700 }}>Erro: {error}</div>}
             </form>
@@ -209,12 +284,25 @@ export default function Risks() {
               <div style={{ display: "grid", gap: 10 }}>
                 {risks.map((r) => (
                   <div key={r.id} className="card" style={{ padding: 12 }}>
-                    <div style={{ fontWeight: 800 }}>{r.hazard}</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                      <div style={{ fontWeight: 800 }}>{r.hazard}</div>
+
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button type="button" onClick={() => startEdit(r)} disabled={busy} style={{ padding: "6px 10px" }}>
+                          Editar
+                        </button>
+                        <button type="button" onClick={() => handleDelete(r.id)} disabled={busy} style={{ padding: "6px 10px" }}>
+                          Excluir
+                        </button>
+                      </div>
+                    </div>
+
                     <div style={{ opacity: 0.85 }}>{r.risk_description}</div>
                     <div style={{ fontSize: 12, opacity: 0.7 }}>
                       Prob: {r.probability} | Sev: {r.severity}
                       {r.risk_type ? ` | Tipo: ${r.risk_type}` : ""}
                     </div>
+
                     {r.existing_controls && (
                       <div style={{ fontSize: 12, opacity: 0.75 }}>Controles: {r.existing_controls}</div>
                     )}
@@ -225,6 +313,7 @@ export default function Risks() {
                 ))}
               </div>
             </div>
+
           </div>
         </div>
       </main>
