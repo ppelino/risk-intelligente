@@ -8,18 +8,19 @@ type Props = {
 
 export default function RequireAuth({ children }: Props) {
   const [loading, setLoading] = useState(true);
-  const [isAuthed, setIsAuthed] = useState(false);
+  const [authed, setAuthed] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      setIsAuthed(!!data.user);
+      setAuthed(!!data.user);
       setLoading(false);
     });
   }, []);
 
   if (loading) return <div style={{ padding: 24 }}>Carregando...</div>;
 
-  if (!isAuthed) return <Navigate to="/login" replace />;
+  if (!authed) return <Navigate to="/login" replace />;
 
   return <>{children}</>;
 }
+
