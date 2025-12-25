@@ -144,3 +144,72 @@ button:disabled {
   color: #ffffff;
   font-weight: 700;
 }
+/* ====== RESPONSIVO: sidebar + conteúdo ====== */
+
+/* Base: layout em PC */
+.di-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: 100vh;
+}
+
+.di-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  padding: 14px;
+  border-right: 1px solid rgba(255,255,255,0.08);
+}
+
+.di-main {
+  padding: 16px;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+/* inputs/botões sempre “clicáveis” no mobile */
+input, select, button {
+  width: 100%;
+  max-width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+}
+
+/* Tablet (até 900px): sidebar vira topo */
+@media (max-width: 900px) {
+  .di-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .di-sidebar {
+    position: relative;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .di-nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+}
+
+/* Celular (até 520px): nav 1 coluna + padding menor */
+@media (max-width: 520px) {
+  .di-main {
+    padding: 12px;
+  }
+
+  .di-nav {
+    grid-template-columns: 1fr;
+  }
+
+  .container {
+    padding: 0 2px;
+  }
+}
+
