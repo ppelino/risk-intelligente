@@ -1,0 +1,49 @@
+/* =========================
+   RESPONSIVE - RISK INTELLIGENCE
+========================= */
+
+.di-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.di-main {
+  flex: 1;
+  padding: 24px;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+/* Tablet */
+@media (max-width: 1024px) {
+  .di-main {
+    padding: 16px;
+  }
+}
+
+/* Celular */
+@media (max-width: 768px) {
+  .di-layout {
+    flex-direction: column;
+  }
+
+  aside {
+    width: 100% !important;
+    min-height: auto !important;
+  }
+
+  .di-main {
+    padding: 12px;
+  }
+
+  input,
+  select,
+  button {
+    width: 100%;
+    font-size: 16px;
+    padding: 12px;
+  }
+}
