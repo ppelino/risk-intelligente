@@ -1,36 +1,25 @@
 import { useEffect, useState } from "react";
-import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { supabase } from "./supabase";
 
-export default function RequireAuth() {
-  const location = useLocation();
+type Props = {
+  children: React.ReactNode;
+};
+
+export default function RequireAuth({ children }: Props) {
   const [loading, setLoading] = useState(true);
-  const [hasSession, setHasSession] = useState(false);
+  const [isAuthed, setIsAuthed] = useState(false);
 
   useEffect(() => {
-    let alive = true;
-
-    supabase.auth.getSession().then(({ data }) => {
-      if (!alive) return;
-      setHasSession(!!data.session);
+    supabase.auth.getUser().then(({ data }) => {
+      setIsAuthed(!!data.user);
       setLoading(false);
     });
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setHasSession(!!session);
-    });
-
-    return () => {
-      alive = false;
-      sub.subscription.unsubscribe();
-    };
   }, []);
 
-  if (loading) return <p style={{ padding: 24 }}>Carregando...</p>;
+  if (loading) return <div style={{ padding: 24 }}>Carregando...</div>;
 
-  if (!hasSession) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
-  }
+  if (!isAuthed) return <Navigate to="/login" replace />;
 
-  return <Outlet />;
+  return <>{children}</>;
 }
