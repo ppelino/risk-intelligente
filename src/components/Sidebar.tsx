@@ -1,74 +1,43 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 
 export default function Sidebar() {
   const [open, setOpen] = useState(false);
-  const { pathname } = useLocation();
+  const loc = useLocation();
 
-  // Fecha menu quando muda de rota
   useEffect(() => {
+    // fecha drawer ao navegar
     setOpen(false);
-  }, [pathname]);
+  }, [loc.pathname]);
 
-  function isActive(p: string) {
-    return pathname === p;
-  }
+  const linkClass = ({ isActive }: { isActive: boolean }) =>
+    `di-link ${isActive ? "active" : ""}`;
 
   return (
     <>
       {/* Topbar mobile */}
       <header className="di-topbar">
-        <button
-          className="di-menu-btn"
-          onClick={() => setOpen((v) => !v)}
-          aria-label="Abrir menu"
-          type="button"
-        >
+        <button className="di-menu-btn" onClick={() => setOpen((v) => !v)} aria-label="Abrir menu">
           ☰
         </button>
-
-        <div className="di-brand">
-          <strong>Risk-Intelligence</strong>
-        </div>
-
-        <div style={{ width: 40 }} />
+        <div className="di-brand">Risk-Intelligence</div>
+        <div style={{ width: 42 }} />
       </header>
 
-      {/* Overlay (só interage quando open=true) */}
-      <div
-        className={`di-overlay ${open ? "show" : ""}`}
-        onClick={() => setOpen(false)}
-        aria-hidden={!open}
-      />
+      {/* Overlay mobile */}
+      <div className={`di-overlay ${open ? "show" : ""}`} onClick={() => setOpen(false)} />
 
-      {/* Sidebar */}
-      <aside className={`di-sidebar ${open ? "open" : ""}`}>
+      {/* Sidebar (desktop) + Drawer (mobile) */}
+      <aside className={`di-sidebar ${open ? "drawer open" : "drawer"}`}>
         <div className="di-sidebar-title">Risk-Intelligence</div>
 
         <nav className="di-nav">
-          <Link className={`di-link ${isActive("/dashboard") ? "active" : ""}`} to="/dashboard">
-            Dashboard
-          </Link>
-
-          <Link className={`di-link ${isActive("/companies") ? "active" : ""}`} to="/companies">
-            Empresas
-          </Link>
-
-          <Link className={`di-link ${isActive("/sectors") ? "active" : ""}`} to="/sectors">
-            Setores / Funções
-          </Link>
-
-          <Link className={`di-link ${isActive("/risks") ? "active" : ""}`} to="/risks">
-            Riscos (PGR/NR-01)
-          </Link>
-
-          <Link className={`di-link ${isActive("/ergonomics") ? "active" : ""}`} to="/ergonomics">
-            Ergonomia (NR-17)
-          </Link>
-
-          <Link className="di-link" to="/login">
-            Voltar (Login)
-          </Link>
+          <NavLink to="/dashboard" className={linkClass}>Dashboard</NavLink>
+          <NavLink to="/companies" className={linkClass}>Empresas</NavLink>
+          <NavLink to="/sectors" className={linkClass}>Setores / Funções</NavLink>
+          <NavLink to="/risks" className={linkClass}>Riscos (PGR/NR-01)</NavLink>
+          <NavLink to="/ergonomics" className={linkClass}>Ergonomia (NR-17)</NavLink>
+          <NavLink to="/login" className={linkClass}>Voltar (Login)</NavLink>
         </nav>
 
         <div className="di-sidebar-hint">No celular, use o menu ☰.</div>
