@@ -25,6 +25,12 @@ type Erg = {
   created_at?: string;
 };
 
+function clamp15(v: unknown, fallback = 2) {
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(1, Math.min(5, n));
+}
+
 export default function Ergonomics() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
@@ -37,14 +43,15 @@ export default function Ergonomics() {
   const [roleName, setRoleName] = useState("");
   const [workstation, setWorkstation] = useState("");
 
-  const [posture, setPosture] = useState(2);
-  const [repetitive, setRepetitive] = useState(2);
-  const [forceEffort, setForceEffort] = useState(2);
-  const [liftingLoad, setLiftingLoad] = useState(2);
-  const [pacePressure, setPacePressure] = useState(2);
-  const [breaks, setBreaks] = useState(2);
-  const [environment, setEnvironment] = useState(2);
-  const [organization, setOrganization] = useState(2);
+  // guardo como number, mas vou blindar no payload
+  const [posture, setPosture] = useState<number>(2);
+  const [repetitive, setRepetitive] = useState<number>(2);
+  const [forceEffort, setForceEffort] = useState<number>(2);
+  const [liftingLoad, setLiftingLoad] = useState<number>(2);
+  const [pacePressure, setPacePressure] = useState<number>(2);
+  const [breaks, setBreaks] = useState<number>(2);
+  const [environment, setEnvironment] = useState<number>(2);
+  const [organization, setOrganization] = useState<number>(2);
 
   const [notes, setNotes] = useState("");
   const [recommendedActions, setRecommendedActions] = useState("");
@@ -52,7 +59,6 @@ export default function Ergonomics() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ✅ ID do item que está sendo editado (null = modo “novo”)
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const canSave = useMemo(() => {
@@ -76,7 +82,16 @@ export default function Ergonomics() {
       environment +
       organization;
     return Math.round((sum / 8) * 10) / 10;
-  }, [posture, repetitive, forceEffort, liftingLoad, pacePressure, breaks, environment, organization]);
+  }, [
+    posture,
+    repetitive,
+    forceEffort,
+    liftingLoad,
+    pacePressure,
+    breaks,
+    environment,
+    organization,
+  ]);
 
   async function loadBase() {
     setError(null);
@@ -85,13 +100,17 @@ export default function Ergonomics() {
     if (c.error) return setError(c.error.message);
     setCompanies(c.data ?? []);
 
-    const s = await supabase.from("sectors").select("id,sector_name,company_id").order("sector_name");
+    const s = await supabase
+      .from("sectors")
+      .select("id,sector_name,company_id")
+      .order("sector_name");
     if (s.error) return setError(s.error.message);
     setSectors(s.data ?? []);
 
     const r = await supabase
       .from("ergonomics")
-      .select(`
+      .select(
+        `
         id,
         company_id,
         sector_id,
@@ -109,16 +128,23 @@ export default function Ergonomics() {
         notes,
         recommended_actions,
         created_at
-      `)
+      `
+      )
       .order("created_at", { ascending: false });
 
     if (r.error) return setError(r.error.message);
-    setItems(r.data ?? []);
+    setItems((r.data ?? []) as Erg[]);
   }
 
   useEffect(() => {
     loadBase();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ✅ quando troca empresa, limpa setor (evita setor de outra empresa)
+  useEffect(() => {
+    setSectorId("");
+  }, [companyId]);
 
   function resetForm() {
     setEditingId(null);
@@ -127,6 +153,7 @@ export default function Ergonomics() {
     setWorkstation("");
     setNotes("");
     setRecommendedActions("");
+
     setPosture(2);
     setRepetitive(2);
     setForceEffort(2);
@@ -135,7 +162,6 @@ export default function Ergonomics() {
     setBreaks(2);
     setEnvironment(2);
     setOrganization(2);
-    // mantém empresa/setor selecionados (fica mais prático)
   }
 
   function startEdit(it: Erg) {
@@ -149,14 +175,14 @@ export default function Ergonomics() {
     setRoleName(it.role_name ?? "");
     setWorkstation(it.workstation ?? "");
 
-    setPosture(it.posture ?? 2);
-    setRepetitive(it.repetitive ?? 2);
-    setForceEffort(it.force_effort ?? 2);
-    setLiftingLoad(it.lifting_load ?? 2);
-    setPacePressure(it.pace_pressure ?? 2);
-    setBreaks(it.breaks ?? 2);
-    setEnvironment(it.environment ?? 2);
-    setOrganization(it.organization ?? 2);
+    setPosture(clamp15(it.posture, 2));
+    setRepetitive(clamp15(it.repetitive, 2));
+    setForceEffort(clamp15(it.force_effort, 2));
+    setLiftingLoad(clamp15(it.lifting_load, 2));
+    setPacePressure(clamp15(it.pace_pressure, 2));
+    setBreaks(clamp15(it.breaks, 2));
+    setEnvironment(clamp15(it.environment, 2));
+    setOrganization(clamp15(it.organization, 2));
 
     setNotes(it.notes ?? "");
     setRecommendedActions(it.recommended_actions ?? "");
@@ -170,66 +196,56 @@ export default function Ergonomics() {
     setBusy(true);
     setError(null);
 
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) {
-      setError("Sessão expirada. Faça login novamente.");
-      setBusy(false);
-      return;
-    }
+    try {
+      const { data: authRes, error: authErr } = await supabase.auth.getUser();
+      if (authErr) throw new Error(authErr.message);
+      if (!authRes.user) throw new Error("Sessão expirada. Faça login novamente.");
 
-    const payload = {
-      // user_id só no insert; no update não precisa mexer
-      company_id: companyId,
-      sector_id: sectorId || null,
-      worker_name: workerName.trim(),
-      role_name: roleName.trim(),
-      workstation: workstation.trim(),
-      posture,
-      repetitive,
-      force_effort: forceEffort,
-      lifting_load: liftingLoad,
-      pace_pressure: pacePressure,
-      breaks,
-      environment,
-      organization,
-      notes: notes.trim() ? notes.trim() : null,
-      recommended_actions: recommendedActions.trim() ? recommendedActions.trim() : null,
-    };
+      // ✅ blindagem total nos números (nunca vai NaN)
+      const payload = {
+        company_id: companyId,
+        sector_id: sectorId || null,
+        worker_name: workerName.trim(),
+        role_name: roleName.trim(),
+        workstation: workstation.trim(),
 
-    // ✅ UPDATE (modo edição)
-    if (editingId) {
-      const upd = await supabase
-        .from("ergonomics")
-        .update(payload)
-        .eq("id", editingId);
+        posture: clamp15(posture),
+        repetitive: clamp15(repetitive),
+        force_effort: clamp15(forceEffort),
+        lifting_load: clamp15(liftingLoad),
+        pace_pressure: clamp15(pacePressure),
+        breaks: clamp15(breaks),
+        environment: clamp15(environment),
+        organization: clamp15(organization),
 
-      if (upd.error) {
-        setError(upd.error.message);
-        setBusy(false);
+        notes: notes.trim() ? notes.trim() : null,
+        recommended_actions: recommendedActions.trim() ? recommendedActions.trim() : null,
+      };
+
+      if (editingId) {
+        const upd = await supabase.from("ergonomics").update(payload).eq("id", editingId);
+        if (upd.error) throw new Error(upd.error.message);
+
+        resetForm();
+        await loadBase();
         return;
       }
 
-      setBusy(false);
+      const ins = await supabase.from("ergonomics").insert({
+        user_id: authRes.user.id,
+        ...payload,
+      });
+
+      if (ins.error) throw new Error(ins.error.message);
+
       resetForm();
-      loadBase();
-      return;
-    }
-
-    // ✅ INSERT (modo novo)
-    const ins = await supabase.from("ergonomics").insert({
-      user_id: auth.user.id,
-      ...payload,
-    });
-
-    if (ins.error) {
-      setError(ins.error.message);
+      await loadBase();
+    } catch (err: any) {
+      console.error("ERRO ao salvar ergonomics:", err);
+      setError(err?.message ?? "Falha ao salvar.");
+    } finally {
       setBusy(false);
-      return;
     }
-
-    setBusy(false);
-    resetForm();
-    loadBase();
   }
 
   async function handleDelete(id: string) {
@@ -239,21 +255,23 @@ export default function Ergonomics() {
     setBusy(true);
     setError(null);
 
-    const del = await supabase.from("ergonomics").delete().eq("id", id);
-    if (del.error) {
-      setError(del.error.message);
+    try {
+      const del = await supabase.from("ergonomics").delete().eq("id", id);
+      if (del.error) throw new Error(del.error.message);
+
+      if (editingId === id) resetForm();
+      await loadBase();
+    } catch (err: any) {
+      console.error("ERRO ao excluir ergonomics:", err);
+      setError(err?.message ?? "Falha ao excluir.");
+    } finally {
       setBusy(false);
-      return;
     }
-
-    // se estava editando esse item, sai do modo edição
-    if (editingId === id) resetForm();
-
-    setBusy(false);
-    loadBase();
   }
 
-  const filteredSectors = sectors.filter((s) => s.company_id === companyId);
+  const filteredSectors = useMemo(() => {
+    return sectors.filter((s) => s.company_id === companyId);
+  }, [sectors, companyId]);
 
   return (
     <div className="di-layout">
@@ -293,28 +311,84 @@ export default function Ergonomics() {
               <input value={workstation} onChange={(e) => setWorkstation(e.target.value)} placeholder="Posto de trabalho (ex: produção)" style={{ padding: 10 }} />
 
               <label>Postura (1–5)</label>
-              <input type="number" min={1} max={5} value={posture} onChange={(e) => setPosture(+e.target.value)} style={{ padding: 10 }} />
+              <input
+                type="number"
+                min={1}
+                max={5}
+                value={posture}
+                onChange={(e) => setPosture(clamp15(e.target.value))}
+                style={{ padding: 10 }}
+              />
 
               <label>Repetitividade (1–5)</label>
-              <input type="number" min={1} max={5} value={repetitive} onChange={(e) => setRepetitive(+e.target.value)} style={{ padding: 10 }} />
+              <input
+                type="number"
+                min={1}
+                max={5}
+                value={repetitive}
+                onChange={(e) => setRepetitive(clamp15(e.target.value))}
+                style={{ padding: 10 }}
+              />
 
               <label>Força/Esforço (1–5)</label>
-              <input type="number" min={1} max={5} value={forceEffort} onChange={(e) => setForceEffort(+e.target.value)} style={{ padding: 10 }} />
+              <input
+                type="number"
+                min={1}
+                max={5}
+                value={forceEffort}
+                onChange={(e) => setForceEffort(clamp15(e.target.value))}
+                style={{ padding: 10 }}
+              />
 
               <label>Levantamento de carga (1–5)</label>
-              <input type="number" min={1} max={5} value={liftingLoad} onChange={(e) => setLiftingLoad(+e.target.value)} style={{ padding: 10 }} />
+              <input
+                type="number"
+                min={1}
+                max={5}
+                value={liftingLoad}
+                onChange={(e) => setLiftingLoad(clamp15(e.target.value))}
+                style={{ padding: 10 }}
+              />
 
               <label>Ritmo / Pressão (1–5)</label>
-              <input type="number" min={1} max={5} value={pacePressure} onChange={(e) => setPacePressure(+e.target.value)} style={{ padding: 10 }} />
+              <input
+                type="number"
+                min={1}
+                max={5}
+                value={pacePressure}
+                onChange={(e) => setPacePressure(clamp15(e.target.value))}
+                style={{ padding: 10 }}
+              />
 
               <label>Pausas (1–5)</label>
-              <input type="number" min={1} max={5} value={breaks} onChange={(e) => setBreaks(+e.target.value)} style={{ padding: 10 }} />
+              <input
+                type="number"
+                min={1}
+                max={5}
+                value={breaks}
+                onChange={(e) => setBreaks(clamp15(e.target.value))}
+                style={{ padding: 10 }}
+              />
 
               <label>Ambiente (1–5)</label>
-              <input type="number" min={1} max={5} value={environment} onChange={(e) => setEnvironment(+e.target.value)} style={{ padding: 10 }} />
+              <input
+                type="number"
+                min={1}
+                max={5}
+                value={environment}
+                onChange={(e) => setEnvironment(clamp15(e.target.value))}
+                style={{ padding: 10 }}
+              />
 
               <label>Organização (1–5)</label>
-              <input type="number" min={1} max={5} value={organization} onChange={(e) => setOrganization(+e.target.value)} style={{ padding: 10 }} />
+              <input
+                type="number"
+                min={1}
+                max={5}
+                value={organization}
+                onChange={(e) => setOrganization(clamp15(e.target.value))}
+                style={{ padding: 10 }}
+              />
 
               <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observações (opcional)" style={{ padding: 10 }} />
               <input value={recommendedActions} onChange={(e) => setRecommendedActions(e.target.value)} placeholder="Ações recomendadas (opcional)" style={{ padding: 10 }} />
@@ -325,12 +399,7 @@ export default function Ergonomics() {
                 </button>
 
                 {editingId && (
-                  <button
-                    type="button"
-                    onClick={resetForm}
-                    disabled={busy}
-                    style={{ padding: 10, width: 180 }}
-                  >
+                  <button type="button" onClick={resetForm} disabled={busy} style={{ padding: 10, width: 180 }}>
                     Cancelar
                   </button>
                 )}
@@ -353,12 +422,7 @@ export default function Ergonomics() {
                         <button type="button" onClick={() => startEdit(it)} disabled={busy} style={{ padding: "6px 10px" }}>
                           Editar
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(it.id)}
-                          disabled={busy}
-                          style={{ padding: "6px 10px" }}
-                        >
+                        <button type="button" onClick={() => handleDelete(it.id)} disabled={busy} style={{ padding: "6px 10px" }}>
                           Excluir
                         </button>
                       </div>
