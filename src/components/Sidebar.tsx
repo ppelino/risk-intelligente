@@ -1,34 +1,28 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 export default function Sidebar() {
   const [open, setOpen] = useState(false);
+  const { pathname } = useLocation();
 
-  // caminho atual sem hook do router (não quebra se router estiver fora)
-  const path = typeof window !== "undefined" ? window.location.pathname : "";
-
-  // fecha menu ao clicar em qualquer link
+  // Fecha menu quando muda de rota
   useEffect(() => {
-    const close = () => setOpen(false);
-    window.addEventListener("click", close);
-    return () => window.removeEventListener("click", close);
-  }, []);
+    setOpen(false);
+  }, [pathname]);
 
   function isActive(p: string) {
-    return path === p;
+    return pathname === p;
   }
 
   return (
     <>
       {/* Topbar mobile */}
-      <header className="di-topbar" onClick={(e) => e.stopPropagation()}>
+      <header className="di-topbar">
         <button
           className="di-menu-btn"
-          onClick={(e) => {
-            e.stopPropagation();
-            setOpen((v) => !v);
-          }}
+          onClick={() => setOpen((v) => !v)}
           aria-label="Abrir menu"
+          type="button"
         >
           ☰
         </button>
@@ -40,20 +34,15 @@ export default function Sidebar() {
         <div style={{ width: 40 }} />
       </header>
 
-      {/* Overlay */}
+      {/* Overlay (só interage quando open=true) */}
       <div
         className={`di-overlay ${open ? "show" : ""}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen(false);
-        }}
+        onClick={() => setOpen(false)}
+        aria-hidden={!open}
       />
 
       {/* Sidebar */}
-      <aside
-        className={`di-sidebar ${open ? "open" : ""}`}
-        onClick={(e) => e.stopPropagation()}
-      >
+      <aside className={`di-sidebar ${open ? "open" : ""}`}>
         <div className="di-sidebar-title">Risk-Intelligence</div>
 
         <nav className="di-nav">
