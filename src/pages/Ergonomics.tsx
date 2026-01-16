@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Sidebar from "../components/Sidebar";
 import { supabase } from "../lib/supabase";
+import Toast from "../components/ui/Toast";
+import ConfirmModal from "../components/ui/ConfirmModal";
 
 type Company = { id: string; name: string };
 type Sector = { id: string; sector_name: string; company_id: string };
@@ -43,7 +45,6 @@ export default function Ergonomics() {
   const [roleName, setRoleName] = useState("");
   const [workstation, setWorkstation] = useState("");
 
-  // guardo como number, mas vou blindar no payload
   const [posture, setPosture] = useState<number>(2);
   const [repetitive, setRepetitive] = useState<number>(2);
   const [forceEffort, setForceEffort] = useState<number>(2);
@@ -60,6 +61,11 @@ export default function Ergonomics() {
   const [error, setError] = useState<string | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Erg | null>(null);
+
+  const [toast, setToast] = useState<{ msg: string; kind: "ok" | "err" } | null>(null);
+  const toastOk = (msg: string) => setToast({ msg, kind: "ok" });
+  const toastErr = (msg: string) => setToast({ msg, kind: "err" });
 
   const canSave = useMemo(() => {
     return (
@@ -73,67 +79,34 @@ export default function Ergonomics() {
 
   const score = useMemo(() => {
     const sum =
-      posture +
-      repetitive +
-      forceEffort +
-      liftingLoad +
-      pacePressure +
-      breaks +
-      environment +
-      organization;
+      posture + repetitive + forceEffort + liftingLoad + pacePressure + breaks + environment + organization;
     return Math.round((sum / 8) * 10) / 10;
-  }, [
-    posture,
-    repetitive,
-    forceEffort,
-    liftingLoad,
-    pacePressure,
-    breaks,
-    environment,
-    organization,
-  ]);
+  }, [posture, repetitive, forceEffort, liftingLoad, pacePressure, breaks, environment, organization]);
 
   async function loadBase() {
     setError(null);
+    try {
+      const c = await supabase.from("companies").select("id,name").order("name");
+      if (c.error) throw c.error;
+      setCompanies(c.data ?? []);
 
-    const c = await supabase.from("companies").select("id,name").order("name");
-    if (c.error) return setError(c.error.message);
-    setCompanies(c.data ?? []);
+      const s = await supabase.from("sectors").select("id,sector_name,company_id").order("sector_name");
+      if (s.error) throw s.error;
+      setSectors(s.data ?? []);
 
-    const s = await supabase
-      .from("sectors")
-      .select("id,sector_name,company_id")
-      .order("sector_name");
-    if (s.error) return setError(s.error.message);
-    setSectors(s.data ?? []);
+      const r = await supabase
+        .from("ergonomics")
+        .select("id,company_id,sector_id,worker_name,role_name,workstation,posture,repetitive,force_effort,lifting_load,pace_pressure,breaks,environment,organization,notes,recommended_actions,created_at")
+        .order("created_at", { ascending: false });
 
-    const r = await supabase
-      .from("ergonomics")
-      .select(
-        `
-        id,
-        company_id,
-        sector_id,
-        worker_name,
-        role_name,
-        workstation,
-        posture,
-        repetitive,
-        force_effort,
-        lifting_load,
-        pace_pressure,
-        breaks,
-        environment,
-        organization,
-        notes,
-        recommended_actions,
-        created_at
-      `
-      )
-      .order("created_at", { ascending: false });
-
-    if (r.error) return setError(r.error.message);
-    setItems((r.data ?? []) as Erg[]);
+      if (r.error) throw r.error;
+      setItems((r.data ?? []) as Erg[]);
+    } catch (e: any) {
+      const msg = e?.message ?? "Falha ao carregar Ergonomia.";
+      setError(msg);
+      toastErr(msg);
+      console.error("loadBase ergonomics error:", e);
+    }
   }
 
   useEffect(() => {
@@ -141,7 +114,6 @@ export default function Ergonomics() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ quando troca empresa, limpa setor (evita setor de outra empresa)
   useEffect(() => {
     setSectorId("");
   }, [companyId]);
@@ -153,7 +125,6 @@ export default function Ergonomics() {
     setWorkstation("");
     setNotes("");
     setRecommendedActions("");
-
     setPosture(2);
     setRepetitive(2);
     setForceEffort(2);
@@ -167,10 +138,8 @@ export default function Ergonomics() {
   function startEdit(it: Erg) {
     setError(null);
     setEditingId(it.id);
-
     setCompanyId(it.company_id);
     setSectorId(it.sector_id ?? "");
-
     setWorkerName(it.worker_name ?? "");
     setRoleName(it.role_name ?? "");
     setWorkstation(it.workstation ?? "");
@@ -187,6 +156,7 @@ export default function Ergonomics() {
     setNotes(it.notes ?? "");
     setRecommendedActions(it.recommended_actions ?? "");
     window.scrollTo({ top: 0, behavior: "smooth" });
+    toastOk("Modo edição ativado.");
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -201,14 +171,12 @@ export default function Ergonomics() {
       if (authErr) throw new Error(authErr.message);
       if (!authRes.user) throw new Error("Sessão expirada. Faça login novamente.");
 
-      // ✅ blindagem total nos números (nunca vai NaN)
       const payload = {
         company_id: companyId,
         sector_id: sectorId || null,
         worker_name: workerName.trim(),
         role_name: roleName.trim(),
         workstation: workstation.trim(),
-
         posture: clamp15(posture),
         repetitive: clamp15(repetitive),
         force_effort: clamp15(forceEffort),
@@ -217,15 +185,15 @@ export default function Ergonomics() {
         breaks: clamp15(breaks),
         environment: clamp15(environment),
         organization: clamp15(organization),
-
         notes: notes.trim() ? notes.trim() : null,
         recommended_actions: recommendedActions.trim() ? recommendedActions.trim() : null,
       };
 
       if (editingId) {
         const upd = await supabase.from("ergonomics").update(payload).eq("id", editingId);
-        if (upd.error) throw new Error(upd.error.message);
+        if (upd.error) throw upd.error;
 
+        toastOk("Avaliação atualizada.");
         resetForm();
         await loadBase();
         return;
@@ -236,42 +204,43 @@ export default function Ergonomics() {
         ...payload,
       });
 
-      if (ins.error) throw new Error(ins.error.message);
+      if (ins.error) throw ins.error;
 
+      toastOk("Avaliação cadastrada.");
       resetForm();
       await loadBase();
     } catch (err: any) {
-      console.error("ERRO ao salvar ergonomics:", err);
-      setError(err?.message ?? "Falha ao salvar.");
+      const msg = err?.message ?? "Falha ao salvar.";
+      setError(msg);
+      toastErr(msg);
+      console.error("ERRO ergonomics save:", err);
     } finally {
       setBusy(false);
     }
   }
 
-  async function handleDelete(id: string) {
-    const ok = confirm("Excluir esta avaliação NR-17? Essa ação não pode ser desfeita.");
-    if (!ok) return;
-
+  async function doDeleteNow(it: Erg) {
     setBusy(true);
     setError(null);
 
     try {
-      const del = await supabase.from("ergonomics").delete().eq("id", id);
-      if (del.error) throw new Error(del.error.message);
+      const del = await supabase.from("ergonomics").delete().eq("id", it.id);
+      if (del.error) throw del.error;
 
-      if (editingId === id) resetForm();
+      if (editingId === it.id) resetForm();
+      toastOk("Excluído.");
       await loadBase();
     } catch (err: any) {
-      console.error("ERRO ao excluir ergonomics:", err);
-      setError(err?.message ?? "Falha ao excluir.");
+      const msg = err?.message ?? "Falha ao excluir.";
+      setError(msg);
+      toastErr(msg);
+      console.error("ERRO ergonomics delete:", err);
     } finally {
       setBusy(false);
     }
   }
 
-  const filteredSectors = useMemo(() => {
-    return sectors.filter((s) => s.company_id === companyId);
-  }, [sectors, companyId]);
+  const filteredSectors = useMemo(() => sectors.filter((s) => s.company_id === companyId), [sectors, companyId]);
 
   return (
     <div className="di-layout">
@@ -280,168 +249,127 @@ export default function Ergonomics() {
       <main className="di-main">
         <div className="container">
           <div className="card" style={{ display: "grid", gap: 12 }}>
-            <h1>Ergonomia – NR-17</h1>
+            <div className="di-toolbar">
+              <h1>Ergonomia – NR-17</h1>
+              <button className="di-btn" type="button" onClick={loadBase} disabled={busy}>
+                Recarregar
+              </button>
+            </div>
 
             <div className="card" style={{ padding: 12 }}>
               <strong>Score (média 1–5):</strong> {score}
-              {editingId && (
-                <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
-                  Modo edição ativo ✅ (ID: {editingId})
-                </div>
-              )}
+              {editingId && <div className="di-small" style={{ marginTop: 6 }}>Modo edição ✅ (ID: {editingId})</div>}
             </div>
 
             <form onSubmit={handleSave} style={{ display: "grid", gap: 10, maxWidth: 820 }}>
-              <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} style={{ padding: 10 }}>
+              <select value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
                 <option value="">Empresa</option>
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
+                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
 
-              <select value={sectorId} onChange={(e) => setSectorId(e.target.value)} style={{ padding: 10 }}>
+              <select value={sectorId} onChange={(e) => setSectorId(e.target.value)}>
                 <option value="">Setor (opcional)</option>
-                {filteredSectors.map((s) => (
-                  <option key={s.id} value={s.id}>{s.sector_name}</option>
-                ))}
+                {filteredSectors.map((s) => <option key={s.id} value={s.id}>{s.sector_name}</option>)}
               </select>
 
-              <input value={workerName} onChange={(e) => setWorkerName(e.target.value)} placeholder="Trabalhador (ex: João Silva)" style={{ padding: 10 }} />
-              <input value={roleName} onChange={(e) => setRoleName(e.target.value)} placeholder="Função/Cargo (ex: Manutenção)" style={{ padding: 10 }} />
-              <input value={workstation} onChange={(e) => setWorkstation(e.target.value)} placeholder="Posto de trabalho (ex: produção)" style={{ padding: 10 }} />
+              <input value={workerName} onChange={(e) => setWorkerName(e.target.value)} placeholder="Trabalhador (ex: João Silva)" />
+              <input value={roleName} onChange={(e) => setRoleName(e.target.value)} placeholder="Função/Cargo (ex: Manutenção)" />
+              <input value={workstation} onChange={(e) => setWorkstation(e.target.value)} placeholder="Posto de trabalho (ex: produção)" />
 
               <label>Postura (1–5)</label>
-              <input
-                type="number"
-                min={1}
-                max={5}
-                value={posture}
-                onChange={(e) => setPosture(clamp15(e.target.value))}
-                style={{ padding: 10 }}
-              />
+              <input type="number" min={1} max={5} value={posture} onChange={(e) => setPosture(clamp15(e.target.value))} />
 
               <label>Repetitividade (1–5)</label>
-              <input
-                type="number"
-                min={1}
-                max={5}
-                value={repetitive}
-                onChange={(e) => setRepetitive(clamp15(e.target.value))}
-                style={{ padding: 10 }}
-              />
+              <input type="number" min={1} max={5} value={repetitive} onChange={(e) => setRepetitive(clamp15(e.target.value))} />
 
               <label>Força/Esforço (1–5)</label>
-              <input
-                type="number"
-                min={1}
-                max={5}
-                value={forceEffort}
-                onChange={(e) => setForceEffort(clamp15(e.target.value))}
-                style={{ padding: 10 }}
-              />
+              <input type="number" min={1} max={5} value={forceEffort} onChange={(e) => setForceEffort(clamp15(e.target.value))} />
 
               <label>Levantamento de carga (1–5)</label>
-              <input
-                type="number"
-                min={1}
-                max={5}
-                value={liftingLoad}
-                onChange={(e) => setLiftingLoad(clamp15(e.target.value))}
-                style={{ padding: 10 }}
-              />
+              <input type="number" min={1} max={5} value={liftingLoad} onChange={(e) => setLiftingLoad(clamp15(e.target.value))} />
 
               <label>Ritmo / Pressão (1–5)</label>
-              <input
-                type="number"
-                min={1}
-                max={5}
-                value={pacePressure}
-                onChange={(e) => setPacePressure(clamp15(e.target.value))}
-                style={{ padding: 10 }}
-              />
+              <input type="number" min={1} max={5} value={pacePressure} onChange={(e) => setPacePressure(clamp15(e.target.value))} />
 
               <label>Pausas (1–5)</label>
-              <input
-                type="number"
-                min={1}
-                max={5}
-                value={breaks}
-                onChange={(e) => setBreaks(clamp15(e.target.value))}
-                style={{ padding: 10 }}
-              />
+              <input type="number" min={1} max={5} value={breaks} onChange={(e) => setBreaks(clamp15(e.target.value))} />
 
               <label>Ambiente (1–5)</label>
-              <input
-                type="number"
-                min={1}
-                max={5}
-                value={environment}
-                onChange={(e) => setEnvironment(clamp15(e.target.value))}
-                style={{ padding: 10 }}
-              />
+              <input type="number" min={1} max={5} value={environment} onChange={(e) => setEnvironment(clamp15(e.target.value))} />
 
               <label>Organização (1–5)</label>
-              <input
-                type="number"
-                min={1}
-                max={5}
-                value={organization}
-                onChange={(e) => setOrganization(clamp15(e.target.value))}
-                style={{ padding: 10 }}
-              />
+              <input type="number" min={1} max={5} value={organization} onChange={(e) => setOrganization(clamp15(e.target.value))} />
 
-              <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observações (opcional)" style={{ padding: 10 }} />
-              <input value={recommendedActions} onChange={(e) => setRecommendedActions(e.target.value)} placeholder="Ações recomendadas (opcional)" style={{ padding: 10 }} />
+              <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observações (opcional)" />
+              <input value={recommendedActions} onChange={(e) => setRecommendedActions(e.target.value)} placeholder="Ações recomendadas (opcional)" />
 
               <div style={{ display: "flex", gap: 10 }}>
-                <button type="submit" disabled={!canSave} style={{ padding: 10, flex: 1 }}>
+                <button className={canSave ? "di-btn-primary" : ""} type="submit" disabled={!canSave} style={{ flex: 1 }}>
                   {busy ? "Salvando..." : editingId ? "Salvar alterações" : "Salvar avaliação NR-17"}
                 </button>
 
                 {editingId && (
-                  <button type="button" onClick={resetForm} disabled={busy} style={{ padding: 10, width: 180 }}>
+                  <button className="di-btn" type="button" onClick={resetForm} disabled={busy} style={{ width: 180 }}>
                     Cancelar
                   </button>
                 )}
               </div>
 
-              {error && <div style={{ color: "#b91c1c", fontWeight: 700 }}>Erro: {error}</div>}
+              {error && <div style={{ color: "#b91c1c", fontWeight: 800 }}>Erro: {error}</div>}
             </form>
 
             <div style={{ marginTop: 10 }}>
               <h3>Avaliações cadastradas</h3>
+
               <div style={{ display: "grid", gap: 10 }}>
                 {items.map((it) => (
                   <div key={it.id} className="card" style={{ padding: 12 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                      <div style={{ fontWeight: 800 }}>
+                      <div style={{ fontWeight: 900 }}>
                         {it.worker_name} — {it.role_name}
+                        <div className="di-small">Posto: {it.workstation}</div>
                       </div>
 
                       <div style={{ display: "flex", gap: 8 }}>
-                        <button type="button" onClick={() => startEdit(it)} disabled={busy} style={{ padding: "6px 10px" }}>
+                        <button className="di-btn-primary" type="button" onClick={() => startEdit(it)} disabled={busy}>
                           Editar
                         </button>
-                        <button type="button" onClick={() => handleDelete(it.id)} disabled={busy} style={{ padding: "6px 10px" }}>
+                        <button className="di-btn-danger" type="button" onClick={() => setConfirmDelete(it)} disabled={busy}>
                           Excluir
                         </button>
                       </div>
                     </div>
 
-                    <div style={{ opacity: 0.85 }}>Posto: {it.workstation}</div>
-                    <div style={{ fontSize: 12, opacity: 0.7 }}>
+                    <div className="di-small" style={{ marginTop: 8 }}>
                       P:{it.posture} R:{it.repetitive} F:{it.force_effort} C:{it.lifting_load} Rit:{it.pace_pressure} Pa:{it.breaks} Amb:{it.environment} Org:{it.organization}
                     </div>
-                    {it.notes && <div style={{ fontSize: 12, opacity: 0.75 }}>Obs: {it.notes}</div>}
-                    {it.recommended_actions && <div style={{ fontSize: 12, opacity: 0.75 }}>Ações: {it.recommended_actions}</div>}
+
+                    {it.notes && <div className="di-small">Obs: {it.notes}</div>}
+                    {it.recommended_actions && <div className="di-small">Ações: {it.recommended_actions}</div>}
                   </div>
                 ))}
               </div>
             </div>
-
           </div>
         </div>
       </main>
+
+      <ConfirmModal
+        open={!!confirmDelete}
+        title="Excluir avaliação NR-17"
+        message={confirmDelete ? `Tem certeza que deseja excluir "${confirmDelete.worker_name}"?` : ""}
+        confirmText={busy ? "Excluindo..." : "Excluir"}
+        danger
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() => {
+          if (!confirmDelete || busy) return;
+          const it = confirmDelete;
+          setConfirmDelete(null);
+          doDeleteNow(it);
+        }}
+      />
+
+      {toast && <Toast msg={toast.msg} kind={toast.kind} onClose={() => setToast(null)} ms={toast.kind === "ok" ? 2600 : 3600} />}
     </div>
   );
 }
