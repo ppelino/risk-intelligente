@@ -76,57 +76,45 @@ button:disabled {
   input, select, textarea { max-width: 520px; }
 }
 
-/* Layout com Sidebar */
+/* =========================
+   LAYOUT + SIDEBAR
+   ========================= */
+
+/* Mobile default */
 .di-layout {
   min-height: 100vh;
-  display: flex;
-  flex-direction: column; /* mobile */
+  display: block;
 }
 
-@media (min-width: 980px) {
-  .di-layout {
-    flex-direction: row; /* desktop */
-    align-items: stretch;
-  }
+.di-main {
+  padding: 16px;
 }
 
-.di-main { flex: 1; }
-
-/* Sidebar */
+/* Sidebar (mobile: aparece como bloco) */
 .di-sidebar {
   width: 100%;
   padding: 12px;
   border-bottom: 1px solid #e2e8f0;
   background: #ffffff;
-  position: sticky;
-  top: 0;
-  z-index: 10;
 }
 
-.di-brand {
+.di-sidebar-title {
   font-weight: 800;
   font-size: 16px;
   margin-bottom: 10px;
 }
 
+.di-sidebar-hint {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #475569;
+}
+
+/* Links */
 .di-nav {
   display: grid;
   grid-template-columns: 1fr;
   gap: 10px;
-}
-
-@media (min-width: 600px) {
-  .di-nav { grid-template-columns: 1fr 1fr; }
-}
-
-@media (min-width: 980px) {
-  .di-sidebar {
-    width: 240px;
-    min-height: 100vh;
-    border-bottom: none;
-    border-right: 1px solid #e2e8f0;
-  }
-  .di-nav { grid-template-columns: 1fr; }
 }
 
 .di-link {
@@ -139,77 +127,134 @@ button:disabled {
   display: block;
 }
 
-.di-link.is-active {
+.di-link.active {
   background: #0f172a;
   color: #ffffff;
   font-weight: 700;
 }
-/* ====== RESPONSIVO: sidebar + conteúdo ====== */
 
-/* Base: layout em PC */
-.di-layout {
-  display: grid;
-  grid-template-columns: 260px 1fr;
-  min-height: 100vh;
+/* Tablet: 2 colunas no menu */
+@media (min-width: 600px) and (max-width: 900px) {
+  .di-nav { grid-template-columns: 1fr 1fr; }
 }
 
-.di-sidebar {
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  padding: 14px;
-  border-right: 1px solid rgba(255,255,255,0.08);
-}
-
-.di-main {
-  padding: 16px;
-}
-
-.container {
-  max-width: 1100px;
-  margin: 0 auto;
-}
-
-/* inputs/botões sempre “clicáveis” no mobile */
-input, select, button {
-  width: 100%;
-  max-width: 100%;
-  padding: 10px;
-  border-radius: 10px;
-}
-
-/* Tablet (até 900px): sidebar vira topo */
-@media (max-width: 900px) {
+/* Desktop: grid fixo (sidebar NÃO sobrepõe) */
+@media (min-width: 901px) {
   .di-layout {
-    grid-template-columns: 1fr;
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    align-items: start;
+    min-height: 100vh;
   }
 
   .di-sidebar {
-    position: relative;
-    height: auto;
-    border-right: none;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow: auto;
+    padding: 14px;
+    border-bottom: none;
+    border-right: 1px solid #e2e8f0;
+    z-index: 5;
   }
 
-  .di-nav {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-}
-
-/* Celular (até 520px): nav 1 coluna + padding menor */
-@media (max-width: 520px) {
   .di-main {
-    padding: 12px;
+    padding: 16px;
+    position: relative;
+    z-index: 1;
   }
 
-  .di-nav {
-    grid-template-columns: 1fr;
+  .di-nav { grid-template-columns: 1fr; }
+}
+
+/* =========================
+   TOPBAR + OVERLAY (MOBILE)
+   ========================= */
+
+/* Topbar (só no mobile) */
+.di-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #0f172a;
+  color: #ffffff;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+
+.di-menu-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.25);
+  background: transparent;
+  color: #ffffff;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+}
+
+.di-brand {
+  font-weight: 800;
+  font-size: 15px;
+}
+
+/* Overlay: NÃO bloqueia nada quando fechado */
+.di-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+  z-index: 40;
+}
+
+.di-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Sidebar mobile "drawer" (quando open) */
+@media (max-width: 900px) {
+  .di-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: min(86vw, 320px);
+    transform: translateX(-105%);
+    transition: transform 180ms ease;
+    border-right: 1px solid #e2e8f0;
+    border-bottom: none;
+    z-index: 45;
+    overflow: auto;
   }
 
-  .container {
-    padding: 0 2px;
+  .di-sidebar.open {
+    transform: translateX(0);
+  }
+
+  /* Conteúdo fica abaixo da topbar no mobile */
+  .di-main {
+    padding-top: 16px;
   }
 }
 
+/* Desktop: desliga topbar e overlay totalmente */
+@media (min-width: 901px) {
+  .di-topbar { display: none !important; }
+  .di-overlay { display: none !important; }
+  /* No desktop a sidebar NÃO é drawer */
+  .di-sidebar {
+    transform: none !important;
+    position: sticky !important;
+    width: 260px;
+  }
+}
